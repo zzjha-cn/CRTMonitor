@@ -87,10 +87,6 @@ export interface TrainInfo {
   tickets: TrainTickets;
 }
 
-export interface TicketSupply {
-  
-}
-
 interface TicketResponse {
   status: boolean;
   data: {

@@ -481,11 +481,13 @@ async function determineRemainTickets(
     "→" +
     (await ChinaRailway.getStationName(trainInfo.to_station_telecode));
 
-  let { remain, msg } = await checkRemainTicketsV2(
+  let ticketResp = await checkRemainTicketsV2(
     trainInfo,
     seatCategory,
   );
 
+  // TODO：优化发送结构。
+  let { remain, msg } = ticketResp;
   msg = msg || "无剩余票";
 
   if (!remain && seatCategory !== undefined) {
