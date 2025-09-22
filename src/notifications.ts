@@ -1,53 +1,128 @@
 import { log, time, asset } from "./utils.js";
-import nodemailer from "nodemailer";
-import crypto from "crypto";
+// @ts-ignore
+import * as nodemailer from "nodemailer";
+import { createHmac } from "node:crypto";
 
-class NotificationBase {
-  static info = {
+interface NotificationInfo {
+  name: string;
+  description: string;
+}
+
+interface MessageContent {
+  title?: string;
+  subject?: string;
+  body?: string;
+  content?: string;
+  text?: string;
+  html?: string;
+}
+
+interface LarkConfig {
+  webhook: string;
+  secret?: string;
+}
+
+interface TelegramConfig {
+  botToken: string;
+  chatId: string;
+}
+
+interface WechatWorkConfig {
+  webhook: string;
+}
+
+interface BarkConfig {
+  deviceKey: string;
+  serverUrl?: string;
+  group?: string;
+  sound?: string;
+  badge?: number;
+  url?: string;
+  icon?: string;
+  level?: string;
+  volume?: number;
+  copy?: string;
+  autoCopy?: boolean;
+  call?: boolean;
+  isArchive?: boolean;
+}
+
+interface SMTPConfig {
+  host: string;
+  port: number;
+  user: string;
+  pass: string;
+  to: string;
+  from?: string;
+  secure?: boolean;
+  ignoreTLS?: boolean;
+  requireTLS?: boolean;
+  cc?: string;
+  bcc?: string;
+  replyTo?: string;
+}
+
+type NotificationConfig = LarkConfig | TelegramConfig | WechatWorkConfig | BarkConfig | SMTPConfig;
+
+abstract class NotificationBase {
+  static info: NotificationInfo = {
     name: "CRTM Notification",
     description: "",
   };
 
-  constructor(config, info) {
+  protected info: NotificationInfo;
+  protected config: NotificationConfig;
+
+  constructor(config: NotificationConfig, info: NotificationInfo) {
     this.info = info;
     this.config = config;
   }
 
-  async send(msg) {
+  async send(msg: string | MessageContent | any): Promise<void> {
     console.log(msg);
   }
 
-  die() {}
+  die(): void {}
 }
 
 class LarkNotification extends NotificationBase {
-  constructor(config) {
+  protected config: LarkConfig;
+
+  constructor(config: LarkConfig) {
     super(config, {
       name: "飞书推送",
       description: config.webhook
-        ? config.webhook.match(/^https?:\/\/(.+?)\/.*$/)[1]
+        ? (() => {
+            const match = config.webhook.match(/^https?:\/\/(.+?)\/.*/);
+            const value = match?.[1];
+            if (value) {
+              return value;
+            }
+            return "飞书机器人";
+          })()
         : "飞书机器人",
     });
     if (!config.webhook) {
       throw new Error(`${this.info.name} 配置不完整：缺少 webhook 地址`);
     }
+    this.config = config;
   }
 
   /**
    * 生成飞书签名校验
-   * @param {number} timestamp 时间戳（秒）
-   * @param {string} secret 密钥
-   * @returns {string} 签名字符串
+   * @param timestamp 时间戳（秒）
+   * @param secret 密钥
+   * @returns 签名字符串
    */
-  _generateSign(timestamp, secret) {
+  private _generateSign(timestamp: number, secret: string): string {
     const stringToSign = `${timestamp}\n${secret}`;
-    const hmac = crypto.createHmac("sha256", stringToSign);
+    const hmac = createHmac("sha256", stringToSign);
     return hmac.update("").digest("base64");
   }
 
-  async send(msg) {
+  async send(msg: string | MessageContent | any): Promise<void> {
     // 构造飞书消息格式
-    const larkMessage = {
+    const larkMessage: any = {
       msg_type: "text",
       content: {
         text: typeof msg === "string" ? msg : JSON.stringify(msg, null, 2),
@@ -83,7 +158,9 @@ class LarkNotification extends NotificationBase {
 }
 
 class TelegramNotification extends NotificationBase {
-  constructor(config) {
+  protected config: TelegramConfig;
+
+  constructor(config: TelegramConfig) {
     super(config, {
       name: "Telegram推送",
       description: config.chatId
@@ -93,9 +170,10 @@ class TelegramNotification extends NotificationBase {
     if (!config.botToken || !config.chatId) {
       throw new Error(`${this.info.name} 配置不完整：缺少 botToken 或 chatId`);
     }
+    this.config = config;
   }
 
-  async send(msg) {
+  async send(msg: string | MessageContent | any): Promise<void> {
     const telegramApiUrl = `https://api.telegram.org/bot${this.config.botToken}/sendMessage`;
 
     const telegramMessage = {
@@ -126,19 +204,22 @@ class TelegramNotification extends NotificationBase {
 }
 
 class WechatWorkNotification extends NotificationBase {
-  constructor(config) {
+  protected config: WechatWorkConfig;
+
+  constructor(config: WechatWorkConfig) {
     super(config, {
       name: "企业微信推送",
       description: config.webhook
-        ? config.webhook.match(/key=([^&]+)/)?.[1]?.substring(0, 8) + "..."
+        ? config.webhook.match(/key=([^&]+)/)?.[1]?.substring(0, 8) + "..." || "企业微信机器人"
         : "企业微信机器人",
     });
     if (!config.webhook) {
       throw new Error(`${this.info.name} 配置不完整：缺少 webhook 地址`);
     }
+    this.config = config;
   }
 
-  async send(msg) {
+  async send(msg: string | MessageContent | any): Promise<void> {
     // 构造企业微信消息格式
     const wechatMessage = {
       msgtype: "text",
@@ -167,7 +248,10 @@ class WechatWorkNotification extends NotificationBase {
 }
 
 class BarkNotification extends NotificationBase {
-  constructor(config) {
+  protected config: BarkConfig;
+  private serverUrl: string;
+
+  constructor(config: BarkConfig) {
     super(config, {
       name: "Bark推送",
       description: config.deviceKey
@@ -178,11 +262,12 @@ class BarkNotification extends NotificationBase {
       throw new Error(`${this.info.name} 配置不完整：缺少 deviceKey`);
     }
 
+    this.config = config;
     // 设置默认服务器地址
     this.serverUrl = config.serverUrl || "https://api.day.app";
   }
 
-  async send(msg) {
+  async send(msg: string | MessageContent | any): Promise<void> {
     // 解析消息内容
     let title = "12306余票监控";
     let body = "";
@@ -195,7 +280,7 @@ class BarkNotification extends NotificationBase {
     }
 
     // 构造 Bark 推送参数
-    const barkPayload = {
+    const barkPayload: any = {
       device_key: this.config.deviceKey,
       title: title,
       body: body,
@@ -236,7 +321,7 @@ class BarkNotification extends NotificationBase {
       }
     } catch (error) {
       // 如果 JSON 方式失败，尝试使用 URL 方式
-      if (error.message.includes("HTTP")) {
+      if ((error as Error).message.includes("HTTP")) {
         throw error;
       }
 
@@ -244,7 +329,7 @@ class BarkNotification extends NotificationBase {
         const urlParams = new URLSearchParams();
         Object.entries(barkPayload).forEach(([key, value]) => {
           if (key !== "device_key" && value !== undefined) {
-            urlParams.append(key, value.toString());
+            urlParams.append(key, value!.toString());
           }
         });
 
@@ -259,14 +344,17 @@ class BarkNotification extends NotificationBase {
           throw new Error(`Bark推送 发送失败：HTTP ${fallbackResponse.status}`);
         }
       } catch (fallbackError) {
-        throw new Error(`Bark推送 发送失败：${fallbackError.message}`);
+        throw new Error(`Bark推送 发送失败：${(fallbackError as Error).message}`);
       }
     }
   }
 }
 
 class SMTPNotification extends NotificationBase {
-  constructor(config) {
+  protected config: SMTPConfig;
+  private transporter: nodemailer.Transporter;
+
+  constructor(config: SMTPConfig) {
     super(config, {
       name: "SMTP邮件推送",
       description: config.to ? `发送至: ${config.to}` : "邮件推送",
@@ -283,6 +371,8 @@ class SMTPNotification extends NotificationBase {
       throw new Error(`${this.info.name} 配置不完整：缺少必需的邮件配置`);
     }
 
+    this.config = config;
+
     // 创建邮件传输器
     this.transporter = nodemailer.createTransport({
       host: config.host,
@@ -298,7 +388,7 @@ class SMTPNotification extends NotificationBase {
     });
   }
 
-  async send(msg) {
+  async send(msg: string | MessageContent | any): Promise<nodemailer.SentMessageInfo> {
     // 解析消息内容
     let subject = "🚄 12306余票监控通知";
     let text = "";
@@ -323,7 +413,7 @@ class SMTPNotification extends NotificationBase {
     }
 
     // 构造邮件选项
-    const mailOptions = {
+    const mailOptions: nodemailer.SendMailOptions = {
       from: this.config.from || this.config.user,
       to: this.config.to,
       subject: subject,
@@ -341,11 +431,11 @@ class SMTPNotification extends NotificationBase {
       console.log(`邮件发送成功: ${info.messageId}`);
       return info;
     } catch (error) {
-      throw new Error(`SMTP邮件推送 发送失败：${error.message}`);
+      throw new Error(`SMTP邮件推送 发送失败：${(error as Error).message}`);
     }
   }
 
-  die() {
+  die(): void {
     if (this.transporter) {
       this.transporter.close();
     }
