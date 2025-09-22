@@ -48,6 +48,11 @@ interface Message {
 }
 
 interface RemainTicketsResult {
+  train_no: string;
+  from_station_telecode: string;
+  to_station_telecode: string;
+  start_time: string;
+  arrive_time: string;
   remain: boolean;
   total?: string | number;
   msg?: string;
@@ -409,7 +414,7 @@ async function processStationQueries(queries: TrainQuerier[]): Promise<boolean> 
       return false;
     }
 
-    const arrTimeList = queries.map(q => q.arriveTime).filter(time => time);
+    const arrTimeList = queries.map(q => q.arriveTime);
     if (arrTimeList.length === 0) {
       console.warn('没有有效的到达时间');
       return false;
@@ -522,83 +527,27 @@ async function checkRemainTicketsV2(
   }
   if (remainTypes.length) {
     return {
+      train_no: trainInfo.train_no,
+      from_station_telecode: trainInfo.from_station_telecode,
+      start_time: trainInfo.start_time,
+      to_station_telecode: trainInfo.to_station_telecode,
+      arrive_time: trainInfo.arrive_time,
       remain: true,
       total: remainTotal >= 20 ? "≥20" : remainTotal,
       msg: remainTypes.join(" / "),
     };
   }
   return {
+    train_no: "",
+    from_station_telecode: "",
+    start_time: "",
+    to_station_telecode: "",
+    arrive_time: "",
     remain: false,
     msg: "区间无票，全程未知",
   };
 }
 
-async function checkRemainTickets(
-  trainInfo: TrainInfo,
-  seatCategory?: string[],
-  checkRoundTrip: boolean = false
-): Promise<RemainTicketsResult> {
-  let remainTypes: string[] = [];
-  let remainTotal = 0;
-  for (let type of Object.keys(trainInfo.tickets)) {
-    if (seatCategory !== undefined && !seatCategory.includes(type)) {
-      continue;
-    }
-    if (trainInfo.tickets[type as keyof TrainTickets] != "" && trainInfo.tickets[type as keyof TrainTickets] != "无") {
-      remainTypes.push(type + " " + trainInfo.tickets[type as keyof TrainTickets]);
-      if (trainInfo.tickets[type as keyof TrainTickets] == "有") {
-        remainTotal += Infinity;
-      } else {
-        remainTotal += parseInt(trainInfo.tickets[type as keyof TrainTickets]);
-      }
-    }
-  }
-  if (remainTypes.length) {
-    return {
-      remain: true,
-      total: remainTotal >= 20 ? "≥20" : remainTotal,
-      msg: remainTypes.join(" / "),
-    };
-  }
-  if (!checkRoundTrip) {
-    return {
-      remain: false,
-      msg: "区间无票",
-    };
-  }
-
-  // 检查下一个站或者两个站是否有票
-  // 将对应的车次的行程缓存，每一次迭代的时候通过缓存获取目的地，
-
-  let roundTripData = await ChinaRailway.checkTickets(
-    trainInfo.start_train_date,
-    trainInfo.start_station_telecode,
-    trainInfo.end_station_telecode,
-    sleep((config.delay || 1) * 1000)
-  );
-
-  for (let row of roundTripData.data.result) {
-    let roundTripInfo = ChinaRailway.parseTrainInfo(row);
-    if (
-      trainInfo.station_train_code == roundTripInfo.station_train_code &&
-      trainInfo.start_station_telecode == roundTripInfo.from_station_telecode &&
-      trainInfo.end_station_telecode == roundTripInfo.to_station_telecode
-    ) {
-      let { remain: roundTripRemain, total: roundTripRemainTotal } =
-        await checkRemainTickets(roundTripInfo, seatCategory, false);
-      return {
-        remain: false,
-        // 比如 广州到潮汕无票，但是广州到汕头有票
-        msg: `区间无票，全程${roundTripRemain ? `有票 (${roundTripRemainTotal}张)` : "无票"
-          }`,
-      };
-    }
-  }
-  return {
-    remain: false,
-    msg: "区间无票，全程未知",
-  };
-}
 
 async function update(): Promise<void> {
   log.info("开始查询余票");
