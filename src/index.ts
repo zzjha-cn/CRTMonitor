@@ -479,7 +479,8 @@ async function determineRemainTickets(
     " " +
     (await ChinaRailway.getStationName(trainInfo.from_station_telecode)) +
     "→" +
-    (await ChinaRailway.getStationName(trainInfo.to_station_telecode));
+    (await ChinaRailway.getStationName(trainInfo.to_station_telecode)) +
+    "(" + trainInfo.start_time + "->" + trainInfo.arrive_time + ") ";
 
   let ticketResp = await checkRemainTicketsV2(
     trainInfo,
