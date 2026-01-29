@@ -92,3 +92,35 @@ class BaseCache<T> implements ICacheContainer<T> {
 class LRUCache<T> extends BaseCache<T> {
     // list
 }
+
+
+interface Node<K, T> {
+    pre: Node<K, T> | undefined;
+    next: Node<K, T> | undefined;
+    val: T | undefined;
+    key: K | undefined;
+}
+
+class List<K, T> {
+    head: Node<K, T>;
+    length: number = 0;
+
+    constructor() {
+        this.head = {
+            pre: undefined,
+            next: undefined,
+            val: undefined,
+            key: undefined,
+        }
+        this.length = 0
+    }
+
+    Add() { }
+    Delete() { }
+    Get() { }
+    Update() { }
+
+    // 元素移动到链首——最常使用的在最前
+    MoveFront() { }
+
+}

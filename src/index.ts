@@ -154,21 +154,19 @@ async function searchTickets(search: SearchConfig): Promise<void> {
     .map((item) => { return ChinaRailway.parseTrainInfo(item) })
 
   parseTrainList = parseTrainList.filter((item) => { // 筛选想要的
-    let f = (
-      (search.trains_filter?.from === undefined ||
-        search.trains_filter?.from.includes(
-          ChinaRailway.stationName[item.from_station_telecode]
-        )) &&
-      (search.trains_filter?.to === undefined ||
-        search.trains_filter?.to.includes(
-          ChinaRailway.stationName[item.to_station_telecode]
-        )) &&
-      (search.trains_filter?.beginHour === undefined ||
-        parseInt(item.start_time.slice(0, 2)) >= search.trains_filter?.beginHour) &&
-      (search.trains_filter?.endHour === undefined ||
-        parseInt(item.arrive_time.slice(0, 2)) <= search.trains_filter?.endHour)
-    );
-    return f;
+    const fromTrue = search.trains_filter?.from === undefined ||
+      search.trains_filter?.from.includes(
+        ChinaRailway.stationName[item.from_station_telecode]
+      );
+    const toTrue = search.trains_filter?.to === undefined ||
+      search.trains_filter?.to.includes(
+        ChinaRailway.stationName[item.to_station_telecode]
+      );
+    const beginTrue = search.trains_filter?.beginHour === undefined ||
+      parseInt(item.start_time.slice(0, 2)) >= search.trains_filter?.beginHour;
+    const endTrue = search.trains_filter?.endHour === undefined ||
+      parseInt(item.arrive_time.slice(0, 2)) <= search.trains_filter?.endHour;
+    return fromTrue && toTrue && beginTrue && endTrue;
   });
   parseTrainList = parseTrainList.filter((item) => {
     // 筛选特定的站点（比如一定要广州南出发，到达哪里）
@@ -641,20 +639,24 @@ function checkConfig(): void {
   }
   notifications = [];
 
-  for (let notification of config.notifications) {
-    try {
-      let n = new (Notifications as any)[notification.type](notification); // 确保实例化时使用正确的键名
-      notifications.push(n);
-      configParsing +=
-        `已配置消息推送：${n.info.name} (${n.info.description})` + "\n";
-    } catch (e) {
-      log.error("配置消息推送时发生错误：", e);
+  if (config.notifications.length) {
+    for (let notification of config.notifications) {
+      try {
+        let n = new (Notifications as any)[notification.type](notification); // 确保实例化时使用正确的键名
+        notifications.push(n);
+        configParsing +=
+          `已配置消息推送：${n.info.name} (${n.info.description})` + "\n";
+      } catch (e) {
+        log.error("配置消息推送时发生错误：", e);
+      }
     }
   }
+
   if (!notifications.length) {
     log.warn("未配置消息推送");
     configParsing += "未配置消息推送\n";
   }
+
   configParsing += "\n";
 
   if (!config.interval) config.interval = 15;
