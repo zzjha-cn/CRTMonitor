@@ -25,6 +25,10 @@ export interface TrainQuerier {
   date: string;
   arriveTime: string;
   seatCategory?: string[];
+  exclude?: {
+    trains?: string[];
+    to?: string[];
+  };
 }
 
 export interface TrainInfo {

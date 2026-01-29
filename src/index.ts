@@ -1,3 +1,4 @@
+import moment from "moment";
 import { ConfigManager } from "./config.js";
 import { NotificationManager } from "./notifications.js";
 import { QueryService } from "./query.js";
@@ -45,53 +46,63 @@ async function main() {
 
     try {
       for (let search of config.watch) {
-        const collector = new Map<string, string[]>(); // 用于收集当前查询任务符合条件的车次
-
-        // 检查search.date的时间是否属于未来15天，不是则跳过
-        const searchDate = new Date(search.date);
-        const now = new Date();
-        if (searchDate < now || searchDate > new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000)) {
-          log.warn(`查询日期 ${search.date} 不在未来15天内，跳过`);
-          continue;
-        }
-
         // 转换查询参数（如将站名转为Code）
         const transformedSearch = await queryService.transformSearch(search);
 
-        // 执行查询
-        await queryService.searchTickets(transformedSearch, collector);
+        for (const dateStr of search.date) {
+          const collector = new Map<string, string[]>(); // 用于收集当前查询任务符合条件的车次
 
-        // 如果当前任务有查到票，立即汇总发送
-        if (collector.size > 0) {
-          log.info(`任务 ${search.date} ${search.from}->${search.to} 发现 ${collector.size} 组余票，正在推送...`);
-
-          let allTickets: string[] = [];
-          for (const tickets of collector.values()) {
-            allTickets.push(...tickets);
+          // 检查search.date的时间是否属于未来15天，不是则跳过
+          if (
+            moment().isSameOrAfter(moment(dateStr, "YYYYMMDD").add(1, "days")) ||
+            moment().add(14, "days").isBefore(moment(dateStr, "YYYYMMDD"))
+          ) {
+            log.warn(`查询日期 ${dateStr} 不在未来15天内，跳过`);
+            continue;
           }
+          // const formattedStr = dateStr.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3');
+          // const searchDate = new Date(formattedStr);
+          // const now = new Date();
+          // if (searchDate < now || searchDate > new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000)) {
+          //   log.warn(`查询日期 ${dateStr} 不在未来15天内，跳过`);
+          //   continue;
+          // }
 
-          if (allTickets.length > 0) {
-            const title = `🎉 发现余票: ${search.date} ${search.from} -> ${search.to}`;
-            // 格式化为Markdown列表，并处理换行缩进以保持列表格式
-            let content = allTickets.map(t => `- ${t.replace(/\n/g, '\n  ')}`).join("\n");
+          // 执行查询
+          await queryService.searchTickets(transformedSearch, collector, dateStr);
 
-            // 处理 remark (支持 @所有人)
-            if (search.remark) {
-              let remarkText = search.remark;
-              if (remarkText === '@all' || remarkText === '@所有人') {
-                remarkText = '<at id="all"></at>';
-              }
-              content += `\n\n${remarkText}`;
+          // 如果当前任务有查到票，立即汇总发送
+          if (collector.size > 0) {
+            log.info(`任务 ${dateStr} ${search.from}->${search.to} 发现 ${collector.size} 组余票，正在推送...`);
+
+            let allTickets: string[] = [];
+            for (const tickets of collector.values()) {
+              allTickets.push(...tickets);
             }
 
-            await notificationManager.sendAll({
-              title: title,
-              time: new Date().toLocaleString(),
-              content: content
-            });
-          }
-        }
+            if (allTickets.length > 0) {
+              const title = `🎉 发现余票: ${dateStr} ${search.from} -> ${search.to}`;
+              // 格式化为Markdown列表，并处理换行缩进以保持列表格式
+              let content = allTickets.map(t => `- ${t.replace(/\n/g, '\n  ')}`).join("\n");
 
+              // 处理 remark (支持 @所有人)
+              if (search.remark) {
+                let remarkText = search.remark;
+                if (remarkText === '@all' || remarkText === '@所有人') {
+                  remarkText = '<at id="all"></at>';
+                }
+                content += `\n\n${remarkText}`;
+              }
+
+              await notificationManager.sendAll({
+                title: title,
+                time: new Date().toLocaleString(),
+                content: content
+              });
+            }
+          }
+          await sleep((config.delay || 5) * 1000);
+        }
         // 避免请求过快
         await sleep((config.delay || 5) * 1000);
       }
