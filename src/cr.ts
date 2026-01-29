@@ -1,11 +1,7 @@
 import moment from "moment";
+import { MemoryCache } from "./cache.js";
 
-interface CacheItem<T> {
-  data: T;
-  timestamp: number;
-  expireAt: number;
-}
-
+// 定义接口
 export interface TrainTickets {
   优选一等座: string;
   高级软卧: string;
@@ -24,15 +20,10 @@ export interface TrainTickets {
 }
 
 export interface TrainQuerier {
-  // 通过to + arrviveTime 就可以定位到要的某一趟车
-  fromCode: string
-  toCode: string
-  date: string
-  arriveTime: string
-  // filterStation?: {
-  //   fromTeleCode?: string[]
-  //   toTeleCode?: string[]
-  // }
+  fromCode: string;
+  toCode: string;
+  date: string;
+  arriveTime: string;
 }
 
 export interface TrainInfo {
@@ -87,7 +78,7 @@ export interface TrainInfo {
   tickets: TrainTickets;
 }
 
-interface TicketResponse {
+export interface TicketResponse {
   status: boolean;
   data: {
     result: string[];
@@ -95,9 +86,9 @@ interface TicketResponse {
 }
 
 export interface ExtendStationCfg {
-  trainCode: string
-  from: StationData | undefined
-  to: StationData | undefined
+  trainCode: string;
+  from: StationData | undefined;
+  to: StationData | undefined;
 }
 
 export interface StationData {
@@ -117,14 +108,15 @@ export interface StationData {
   station_no: string;
   station_code: string;
 }
+
 interface TrainStationResponse {
   data: TrainStationPanl;
-  httpstatus: number
-  status: boolean
+  httpstatus: number;
+  status: boolean;
 }
 
 interface TrainStationPanl {
-  data: StationData[]
+  data: StationData[];
 }
 
 interface RetryConfig {
@@ -133,127 +125,28 @@ interface RetryConfig {
   backoffMultiplier: number;
 }
 
-interface CacheConfig {
-  ttl: number;
-  maxSize: number;
-  cleanupInterval: number;
-}
-
-interface CacheStats {
-  total: number;
-  valid: number;
-  expired: number;
-  maxSize: number;
-  ttl: string;
-}
-
 export class ChinaRailway {
-  static ticketCache = new Map<string, CacheItem<TicketResponse>>();
-  static trainStationCache = new Map<string, CacheItem<TrainStationPanl>>();
+  // 使用新的缓存实现
+  static ticketCache = new MemoryCache<TicketResponse>(10 * 60 * 1000);
+  static trainStationCache = new MemoryCache<TrainStationPanl>(60 * 60 * 1000);
+
   static stationName: Record<string, string>;
   static stationCode: Record<string, string>;
 
   // 重试配置
   static retryConfig: RetryConfig = {
     maxRetries: 3,
-    retryDelay: 1000, // 1秒
-    backoffMultiplier: 2, // 指数退避
+    retryDelay: 1000,
+    backoffMultiplier: 2,
   };
 
-  // 缓存配置
-  static cacheConfig: CacheConfig = {
-    ttl: 5 * 60 * 1000, // 5分钟过期时间
-    maxSize: 1000, // 最大缓存条目数
-    cleanupInterval: 10 * 60 * 1000, // 10分钟清理一次过期缓存
-  };
+  // 缓存 TTL 配置 (毫秒)
+  static TICKET_CACHE_TTL = 5 * 60 * 1000;
+  static STATION_CACHE_TTL = 4 * 24 * 60 * 60 * 1000; // 站点信息缓存更久
 
-  // 初始化定时清理
-  static {
-    // 定期清理过期缓存
-    setInterval(() => {
-      this.cleanExpiredCache();
-    }, this.cacheConfig.cleanupInterval);
-  }
-
-  // 设置缓存
-  static setCache(key: string, value: TicketResponse): void {
-    const now = Date.now();
-
-    // 如果缓存已满，清理最旧的条目
-    if (this.ticketCache.size >= this.cacheConfig.maxSize) {
-      const firstKey = this.ticketCache.keys().next().value;
-      this.ticketCache.delete(firstKey!);
-    }
-
-    this.ticketCache.set(key, {
-      data: value,
-      timestamp: now,
-      expireAt: now + this.cacheConfig.ttl,
-    });
-  }
-
-  // 获取缓存
-  static getCache(key: string): TicketResponse | null {
-    const cached = this.ticketCache.get(key);
-    if (!cached) {
-      return null;
-    }
-
-    const now = Date.now();
-    if (now > cached.expireAt) {
-      this.ticketCache.delete(key);
-      return null;
-    }
-
-    return cached.data;
-  }
-
-  // 清理过期缓存
-  static cleanExpiredCache(): void {
-    const now = Date.now();
-    let cleanedCount = 0;
-
-    for (const [key, cached] of this.ticketCache.entries()) {
-      if (now > cached.expireAt) {
-        this.ticketCache.delete(key);
-        cleanedCount++;
-      }
-    }
-
-    if (cleanedCount > 0) {
-      console.log(
-        `清理了 ${cleanedCount} 个过期缓存条目，当前缓存大小: ${this.ticketCache.size}`
-      );
-    }
-  }
-
-  // 清空缓存
   static clearTicketCache(): void {
     this.ticketCache.clear();
     console.log("已清空所有票务缓存");
-  }
-
-  // 获取缓存统计信息
-  static getCacheStats(): CacheStats {
-    const now = Date.now();
-    let validCount = 0;
-    let expiredCount = 0;
-
-    for (const cached of this.ticketCache.values()) {
-      if (now > cached.expireAt) {
-        expiredCount++;
-      } else {
-        validCount++;
-      }
-    }
-
-    return {
-      total: this.ticketCache.size,
-      valid: validCount,
-      expired: expiredCount,
-      maxSize: this.cacheConfig.maxSize,
-      ttl: this.cacheConfig.ttl / 1000 + "秒",
-    };
   }
 
   // 通用重试方法
@@ -327,8 +220,8 @@ export class ChinaRailway {
       throw new Error("日期需为0~15天内");
     }
 
-    const cacheKey = date + from + to;
-    const cachedData = this.getCache(cacheKey);
+    const cacheKey = `${date}_${from}_${to}`;
+    const cachedData = this.ticketCache.get(cacheKey);
     if (cachedData) {
       console.log(`使用缓存数据: ${cacheKey}`);
       return cachedData;
@@ -359,19 +252,17 @@ export class ChinaRailway {
     }
 
     // 缓存数据
-    this.setCache(cacheKey, data);
+    this.ticketCache.set(cacheKey, data, this.TICKET_CACHE_TTL);
     console.log(`缓存新数据: ${cacheKey}`);
 
     return data;
   }
 
   static async getTrainAllStations(code: string, from: string, to: string, date: string, delay?: Promise<void>): Promise<TrainStationPanl | undefined> {
-    let cached = ChinaRailway.trainStationCache.get(code);
+    const cacheKey = code; // 车次号作为缓存key
+    const cached = this.trainStationCache.get(cacheKey);
     if (cached) {
-      let now = moment.now();
-      if (cached.expireAt == -1 || now < cached.expireAt) {
-        return cached.data;
-      }
+      return cached;
     }
 
     if (delay) {
@@ -383,34 +274,26 @@ export class ChinaRailway {
       + "&from_station_telecode=" + from
       + "&to_station_telecode=" + to
       + "&depart_date=" + date;
-    let res = await this.fetchWithRetry(api, {
-      headers: {
-        Cookie: "JSESSIONID=",
-      },
-    });
-    // {
-    //   arrive_time: "19:40",
-    //   station_name: "新塘",
-    //   isChina: "1",
-    //   start_time: "19:42",
-    //   stopover_time: "2分钟",
-    //   station_no: "02",
-    //   country_code: "",
-    //   country_name: "",
-    //   isEnabled: true,
-    // }
 
-    let resp: TrainStationResponse = await res.json();
-    if (resp.data.data.length > 0) {
-      await Promise.all(resp.data.data.map(async (item) => {
-        item.station_code = await ChinaRailway.getStationCode(item.station_name || '') || "";
-      }))
-      ChinaRailway.trainStationCache.set(code, {
-        data: resp.data,
-        timestamp: moment.now(),
-        expireAt: -1,
-      });
-      return resp.data;
+    try {
+        let res = await this.fetchWithRetry(api, {
+        headers: {
+            Cookie: "JSESSIONID=",
+        },
+        });
+
+        let resp: TrainStationResponse = await res.json();
+        if (resp.data && resp.data.data && resp.data.data.length > 0) {
+            await Promise.all(resp.data.data.map(async (item) => {
+                item.station_code = await ChinaRailway.getStationCode(item.station_name || '') || "";
+            }))
+
+            // 缓存站点信息，过期时间设长一点，或者使用永久缓存（直到重启）
+            this.trainStationCache.set(cacheKey, resp.data, this.STATION_CACHE_TTL);
+            return resp.data;
+        }
+    } catch(e) {
+        console.warn(`查询车次 ${code} 经停站失败`, e);
     }
     return undefined;
   }

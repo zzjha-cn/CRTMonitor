@@ -1,126 +1,77 @@
 import moment from "moment";
 
-interface CacheItem<T> {
+export interface CacheItem<T> {
     expire: number;
     item: T;
     key: string;
 }
 
-interface Result { code: number, msg: string }
-interface ICacheContainer<T> {
-    Get(key: string): CacheItem<T> | undefined;
-    SetVal(key: string, val: T, expire: number): Result;
-    SetCahceItem(key: string, val: CacheItem<T>): Result;
-    PeekAll(): Map<string, T>;
-    Range(fn: (key: string, val: CacheItem<T>) => Result): void;
-    OnEmit(item: CacheItem<T>): void;
-}
+export class MemoryCache<T> {
+    private cache: Map<string, CacheItem<T>>;
+    private cleanupInterval: NodeJS.Timeout;
 
-class BaseCache<T> implements ICacheContainer<T> {
-    cache: Map<string, CacheItem<T>>
-
-    constructor() {
-        this.cache = new Map<string, CacheItem<T>>
+    constructor(cleanupIntervalMs: number = 60000) {
+        this.cache = new Map<string, CacheItem<T>>();
+        // 定期清理过期缓存
+        this.cleanupInterval = setInterval(() => {
+            this.cleanup();
+        }, cleanupIntervalMs);
     }
 
-    Get(key: string): CacheItem<T> | undefined {
-        let item = this.cache.get(key)
+    set(key: string, value: T, ttlMs: number): void {
+        const expire = Date.now() + ttlMs;
+        this.cache.set(key, {
+            key,
+            item: value,
+            expire
+        });
+    }
+
+    get(key: string): T | undefined {
+        const item = this.cache.get(key);
         if (!item) {
             return undefined;
         }
 
-        let now = moment.now();
-        if (item.expire > now) {
-            return item
-        } else {
-            this.OnEmit(item);
-            this.cache.delete(item.key);
+        if (Date.now() > item.expire) {
+            this.cache.delete(key);
             return undefined;
         }
+
+        return item.item;
     }
 
-    SetVal(key: string, val: T, expire: number): Result {
-        let item: CacheItem<T> = {
-            key: key,
-            expire: expire,
-            item: val,
-        }
-        return this.SetCahceItem(key, item)
-    }
-    SetCahceItem(key: string, val: CacheItem<T>): Result {
-        this.cache.set(key, val)
-        return {
-            code: 0,
-            msg: "",
-        }
+    has(key: string): boolean {
+        return this.get(key) !== undefined;
     }
 
-    PeekAll(): Map<string, T> {
-        let res = new Map<string, T>();
-        let now = moment.now();
-        this.cache.forEach((item) => {
-            if (item.expire > now) {
-                res.set(item.key, item.item)
-            } else {
-                this.cache.delete(item.key);
-                this.OnEmit(item);
+    delete(key: string): void {
+        this.cache.delete(key);
+    }
+
+    clear(): void {
+        this.cache.clear();
+    }
+
+    cleanup(): void {
+        const now = Date.now();
+        for (const [key, item] of this.cache.entries()) {
+            if (now > item.expire) {
+                this.cache.delete(key);
             }
-        });
-        return res
-    }
-    Range(fn: (key: string, val: CacheItem<T>) => Result): void {
-        try {
-            let now = moment.now();
-            this.cache.forEach((item) => {
-                if (item.expire > now) {
-                    fn(item.key, item);
-                } else {
-                    this.cache.delete(item.key);
-                    this.OnEmit(item);
-                }
-            });
-        } catch (err) {
-            console.error(err);
         }
     }
 
-    OnEmit(item: CacheItem<T>): void {
+    destroy(): void {
+        clearInterval(this.cleanupInterval);
+        this.cache.clear();
+    }
+
+    getStats() {
+        return {
+            size: this.cache.size
+        };
     }
 }
 
-
-class LRUCache<T> extends BaseCache<T> {
-    // list
-}
-
-
-interface Node<K, T> {
-    pre: Node<K, T> | undefined;
-    next: Node<K, T> | undefined;
-    val: T | undefined;
-    key: K | undefined;
-}
-
-class List<K, T> {
-    head: Node<K, T>;
-    length: number = 0;
-
-    constructor() {
-        this.head = {
-            pre: undefined,
-            next: undefined,
-            val: undefined,
-            key: undefined,
-        }
-        this.length = 0
-    }
-
-    Add() { }
-    Delete() { }
-    Get() { }
-    Update() { }
-
-    // 元素移动到链首——最常使用的在最前
-    MoveFront() { }
-
-}
+export const GlobalCache = new MemoryCache<any>();

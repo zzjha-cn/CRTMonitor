@@ -70,7 +70,7 @@ abstract class NotificationBase {
     description: "",
   };
 
-  protected info: NotificationInfo;
+  public info: NotificationInfo;
   protected config: NotificationConfig;
 
   constructor(config: NotificationConfig, info: NotificationInfo) {
@@ -82,7 +82,7 @@ abstract class NotificationBase {
     console.log(msg);
   }
 
-  die(): void {}
+  die(): void { }
 }
 
 class LarkNotification extends NotificationBase {
@@ -93,13 +93,13 @@ class LarkNotification extends NotificationBase {
       name: "飞书推送",
       description: config.webhook
         ? (() => {
-            const match = config.webhook.match(/^https?:\/\/(.+?)\/.*/);
-            const value = match?.[1];
-            if (value) {
-              return value;
-            }
-            return "飞书机器人";
-          })()
+          const match = config.webhook.match(/^https?:\/\/(.+?)\/.*/);
+          const value = match?.[1];
+          if (value) {
+            return value;
+          }
+          return "飞书机器人";
+        })()
         : "飞书机器人",
     });
     if (!config.webhook) {
@@ -121,13 +121,40 @@ class LarkNotification extends NotificationBase {
   }
 
   async send(msg: string | MessageContent | any): Promise<void> {
-    // 构造飞书消息格式
-    const larkMessage: any = {
-      msg_type: "text",
-      content: {
-        text: typeof msg === "string" ? msg : JSON.stringify(msg, null, 2),
-      },
-    };
+    let larkMessage: any;
+
+    // 1. 检查是否为自定义 JSON (包含 msg_type)，如果是则直接使用
+    if (typeof msg === "object" && msg !== null && msg.msg_type) {
+      larkMessage = msg;
+    }
+    // 2. 检查是否为结构化消息 (包含 title 和 content) -> 转为交互式卡片 (Markdown)
+    else if (typeof msg === "object" && msg !== null && msg.title && msg.content) {
+      larkMessage = {
+        msg_type: "interactive",
+        card: {
+          header: {
+            title: { tag: "plain_text", content: msg.title },
+            template: "blue",
+          },
+          elements: [
+            { tag: "markdown", content: msg.content },
+            ...(msg.time ? [{
+              tag: "note",
+              elements: [{ tag: "plain_text", content: msg.time }]
+            }] : [])
+          ],
+        },
+      };
+    }
+    // 3. 其他情况 -> 纯文本
+    else {
+      larkMessage = {
+        msg_type: "text",
+        content: {
+          text: typeof msg === "string" ? msg : JSON.stringify(msg, null, 2),
+        },
+      };
+    }
 
     // 如果配置了签名密钥，添加签名校验
     if (this.config.secret) {
@@ -333,11 +360,10 @@ class BarkNotification extends NotificationBase {
           }
         });
 
-        const getUrl = `${this.serverUrl}/${
-          this.config.deviceKey
-        }/${encodeURIComponent(title)}/${encodeURIComponent(
-          body
-        )}?${urlParams.toString()}`;
+        const getUrl = `${this.serverUrl}/${this.config.deviceKey
+          }/${encodeURIComponent(title)}/${encodeURIComponent(
+            body
+          )}?${urlParams.toString()}`;
 
         const fallbackResponse = await fetch(getUrl, { method: "GET" });
         if (!fallbackResponse.ok) {
@@ -449,3 +475,53 @@ export const Notifications = {
   Bark: BarkNotification,
   SMTP: SMTPNotification,
 };
+
+export class NotificationManager {
+  private notifications: NotificationBase[] = [];
+
+  constructor(configs: any[]) {
+    this.init(configs);
+  }
+
+  private init(configs: any[]) {
+    this.notifications = [];
+    if (!configs || configs.length === 0) {
+      console.warn("未配置任何通知插件");
+      return;
+    }
+    for (const config of configs) {
+      try {
+        const type = config.type;
+        if (Notifications[type as keyof typeof Notifications]) {
+          const NotificationClass = Notifications[type as keyof typeof Notifications];
+          // @ts-ignore
+          const instance = new NotificationClass(config);
+          this.notifications.push(instance);
+          console.log(`已加载通知插件: ${instance.info.name}`);
+        } else {
+          console.warn(`未知的通知类型: ${type}`);
+        }
+      } catch (e: any) {
+        console.error(`初始化通知 ${config.type} 失败: ${e.message}`);
+      }
+    }
+  }
+
+  async sendAll(msg: any): Promise<void> {
+    const promises = this.notifications.map(n =>
+      n.send(msg).catch(err => {
+        console.error(`${n.info.name} 发送失败: ${err.message}`);
+      })
+    );
+    await Promise.all(promises);
+  }
+
+  destroy() {
+    this.notifications.forEach(n => n.die());
+    this.notifications = [];
+  }
+
+  get count() {
+    return this.notifications.length;
+  }
+}

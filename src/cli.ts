@@ -4,7 +4,7 @@ import inquirer from "inquirer";
 import chalk from "chalk";
 // @ts-ignore
 import chalkTable from "chalk-table";
-import ChinaRailway from "./cr.js";
+import { ChinaRailway } from "./cr.js";
 import * as fs from "fs";
 // @ts-ignore
 import yaml from "js-yaml";
