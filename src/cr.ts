@@ -24,6 +24,7 @@ export interface TrainQuerier {
   toCode: string;
   date: string;
   arriveTime: string;
+  seatCategory?: string[];
 }
 
 export interface TrainInfo {

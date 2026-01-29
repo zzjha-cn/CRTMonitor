@@ -178,7 +178,8 @@ export class QueryService {
         }
 
         // 生成购票链接
-        const bookingUrl = `https://kyfw.12306.cn/otn/leftTicket/init?linktypeid=dc&fs=${encodeURIComponent(fromName || "")},${trainInfo.from_station_telecode}&ts=${encodeURIComponent(toName || "")},${trainInfo.to_station_telecode}&date=${date}&flag=N,N,Y`;
+        // const bookingUrl = `https://kyfw.12306.cn/otn/leftTicket/init?linktypeid=dc&fs=${encodeURIComponent(fromName || "")},${trainInfo.from_station_telecode}&ts=${encodeURIComponent(toName || "")},${trainInfo.to_station_telecode}&date=${date}&flag=N,N,Y`;
+        const bookingUrl = `https://kyfw.12306.cn/otn/leftTicket/init?linktypeid=dc`;
 
         collector.get(key)!.push(trainDescription + " " + msg + `\n[购票链接](${bookingUrl})`);
     }
@@ -248,7 +249,7 @@ export class QueryService {
           trainInfo.from_station_telecode,
           trainInfo.to_station_telecode,
           moment(trainInfo.start_train_date).format("YYYY-MM-DD").toString(),
-          sleep(100) // 减少延迟
+          sleep(500) // 减少延迟
         );
 
         const stationData = stationList?.data;
@@ -319,6 +320,7 @@ export class QueryService {
           fromCode: station.from!.station_code,
           toCode: station.to!.station_code,
           date: search.date,
+          seatCategory: search.seatCategory,
         });
       } catch (error) {
         continue;
@@ -359,7 +361,7 @@ export class QueryService {
       if (newTicketList.length === 0) return;
 
       for (const trainInfo of newTicketList) {
-        await this.determineRemainTickets(trainInfo, info.date, collector);
+        await this.determineRemainTickets(trainInfo, info.date, collector, info.seatCategory);
       }
     } catch (error) {
       console.error('处理站点查询时发生错误:', error);

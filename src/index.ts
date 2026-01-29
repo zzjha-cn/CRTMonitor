@@ -19,10 +19,10 @@ async function main() {
   }
 
   // 发送启动消息
-  await notificationManager.sendAll({
-    time: new Date().toLocaleString(),
-    content: "CRTMonitor 已启动，开始监控车票信息。"
-  });
+  // await notificationManager.sendAll({
+  //   time: new Date().toLocaleString(),
+  //   content: "CRTMonitor 已启动，开始监控车票信息。"
+  // });
 
   // 3. 初始化查询服务
   const queryService = new QueryService(notificationManager);
@@ -73,7 +73,16 @@ async function main() {
           if (allTickets.length > 0) {
             const title = `🎉 发现余票: ${search.date} ${search.from} -> ${search.to}`;
             // 格式化为Markdown列表，并处理换行缩进以保持列表格式
-            const content = allTickets.map(t => `- ${t.replace(/\n/g, '\n  ')}`).join("\n");
+            let content = allTickets.map(t => `- ${t.replace(/\n/g, '\n  ')}`).join("\n");
+
+            // 处理 remark (支持 @所有人)
+            if (search.remark) {
+              let remarkText = search.remark;
+              if (remarkText === '@all' || remarkText === '@所有人') {
+                remarkText = '<at id="all"></at>';
+              }
+              content += `\n\n${remarkText}`;
+            }
 
             await notificationManager.sendAll({
               title: title,

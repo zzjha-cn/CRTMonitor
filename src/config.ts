@@ -22,7 +22,7 @@ export interface SearchConfig {
     fromTeleCode?: string[];
     toTeleCode?: string[];
   };
-  Remark?: string;
+  remark?: string;
   seatCategory?: string[];
   trains?: TrainConfig[];
   // CLI 生成的配置中可能包含 queryParams
