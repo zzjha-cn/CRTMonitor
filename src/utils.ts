@@ -2,7 +2,7 @@ import { readFileSync } from 'fs';
 import moment from 'moment';
 import chalk from 'chalk';
 // @ts-ignore - node:sea is experimental and may not have types
-import { isSea, getAsset } from 'node:sea';
+// import { isSea, getAsset } from 'node:sea';
 
 export function time(): string {
     return moment().format('YYYY/MM/DD HH:mm:ss');
@@ -51,9 +51,14 @@ export const log: Logger = {
 };
 
 export function asset(name: string): string | Buffer {
-    if (isSea()) {
-        return getAsset(name, 'UTF-8');
-    } else {
-        return readFileSync(name);
+    try {
+        // @ts-ignore
+        const { isSea, getAsset } = require('node:sea');
+        if (isSea()) {
+            return getAsset(name, 'UTF-8');
+        }
+    } catch (e) {
+        // node:sea module not found, fallback to fs
     }
+    return readFileSync(name);
 }
