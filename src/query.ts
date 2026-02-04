@@ -70,8 +70,23 @@ export class QueryService {
                 );
             const beginTrue = search.trains_filter?.beginHour === undefined ||
                 parseInt(item.start_time.slice(0, 2)) >= search.trains_filter?.beginHour;
+
+            let arriveHour = parseInt(item.arrive_time.slice(0, 2));
+            // 尝试利用历时计算准确的跨天到达时间（例如次日02:00会被计算为26:00）
+            const [lishiH, lishiM] = item.lishi.split(':').map(Number);
+            const startHour = parseInt(item.start_time.slice(0, 2));
+
+            if (!isNaN(lishiH) && !isNaN(startHour)) {
+                const startM = parseInt(item.start_time.split(':')[1]) || 0;
+                const lishiMin = isNaN(lishiM) ? 0 : lishiM;
+                arriveHour = Math.floor(((startHour * 60 + startM) + (lishiH * 60 + lishiMin)) / 60);
+            } else if (arriveHour < startHour) {
+                // 降级：仅处理跨一天的情况
+                arriveHour += 24;
+            }
+
             const endTrue = search.trains_filter?.endHour === undefined ||
-                parseInt(item.arrive_time.slice(0, 2)) <= search.trains_filter?.endHour;
+                arriveHour <= search.trains_filter?.endHour;
             return fromTrue && toTrue && beginTrue && endTrue;
         });
 
