@@ -3,4 +3,5 @@ node_modules/
 dist/
 
 config.yml
+config.test.yml
 log.log
