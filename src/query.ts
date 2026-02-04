@@ -96,6 +96,74 @@ export class QueryService {
             }
             return false
         });
+        /*
+            {
+              secretStr: "Rskt6Kp%2FskeCVPKzoxQaizjRLVL7ssnwv7Eb5Zdd44G5AkhE8mhva5IF%2FoAbPuP8QDG8e%2Bf75P2O%0AzHooU4BSu0v0MEYNxRaZ9f8IRc3X%2F0AyYc1K5V6wZBKuvi%2BAByXV79laqpL1oPps2EgsXAEV5tz7%0AbLXyRNmx3M75qY4KEer2V1IK0s9e5t9CJDVhPyD%2FuL%2BQtBhCSOfnE4o8Z1BqH4dNb0fmbguc%2FkfB%0Ajuwu2HzG0xApQeEJbljhpVp7YyFxcBsBYHMup%2FjI%2Ba9OsDWde8S0v1nQgSa34KHbP57%2Bb1wpg4Lm%0AfOsTfMLgbqb72SMSiVkAmVSMVkAKtyg57XEr1CdXs4Rz8sYj3tytm3cz8CM%3D",
+              buttonTextInfo: "11点起售",
+              train_no: "67000G513500",
+              station_train_code: "G5135",
+              start_station_telecode: "OTQ",
+              end_station_telecode: "ZMQ",
+              from_station_telecode: "ZCA",
+              to_station_telecode: "YBQ",
+              start_time: "13:43",
+              arrive_time: "16:03",
+              lishi: "02:20",
+              canWebBuy: "IS_TIME_NOT_BUY",
+              yp_info: "B0BPqCZG4nTXUTfrtXznM4WQuqtutojSz9q2eFqV4IgGTDq49vb0a0JsGlY%3D",
+              start_train_date: "20260218",
+              train_seat_feature: "3",
+              location_code: "Q6",
+              from_station_no: "05",
+              to_station_no: "10",
+              is_support_card: "1",
+              controlled_train_flag: "0",
+              gg_num: "",
+              gr_num: "",
+              qt_num: "",
+              rw_num: "",
+              rz_num: "",
+              tz_num: "",
+              wz_num: "*",
+              yb_num: "",
+              yw_num: "",
+              yz_num: "",
+              ze_num: "*",
+              zy_num: "*",
+              swz_num: "*",
+              srrb_num: "",
+              yp_ex: "90M0O0W0",
+              seat_types: "9MOO",
+              exchange_train_flag: "0",
+              houbu_train_flag: "1",
+              houbu_seat_limit: "",
+              yp_info_new: "9057100000M025900000O017100001O017103000",
+              dw_flag: "5#1#Q0210#0#z#0#z#z",
+              stopcheckTime: "",
+              country_flag: "CHN,CHN",
+              local_arrive_time: "",
+              local_start_time: "",
+              bed_level_info: "",
+              seat_discount_info: "90080M0083O0084W0084",
+              sale_time: "202602041100",
+              tickets: {
+                    "优选一等座": "",
+                    "高级软卧": "",
+                    "其他": "",
+                    "软卧": "",
+                    "软座": "",
+                    "特等座": "",
+                    "无座": "*",
+                YB: "",
+                    "硬卧": "",
+                    "硬座": "",
+                    "二等座": "*",
+                    "一等座": "*",
+                    "商务座": "*",
+                SRRB: "",
+                },
+            }
+        */
 
         // 检查主线路是否有余票
         for (let trainInfo of parseTrainList) {
@@ -212,7 +280,8 @@ export class QueryService {
             const ticketKey = type as keyof TrainTickets;
             const ticketVal = trainInfo.tickets[ticketKey];
 
-            if (ticketVal != "" && ticketVal != "无" && ticketVal != "--") {
+            // *的表示预售
+            if (ticketVal != "" && ticketVal != "无" && ticketVal != "--" && ticketVal != "*") {
                 remainTypes.push(type + " " + ticketVal);
                 if (ticketVal == "有") {
                     remainTotal += Infinity;

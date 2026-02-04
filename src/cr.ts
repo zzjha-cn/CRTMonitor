@@ -280,25 +280,56 @@ export class ChinaRailway {
       + "&to_station_telecode=" + to
       + "&depart_date=" + date;
 
+    /*
+    [
+    {
+      station_name: "广州",
+      train_class_name: "高速",
+      isChina: "1",
+      service_type: "2",
+      end_station_name: "湛江北",
+      stopover_time: "----",
+      country_code: "",
+      isEnabled: true,
+      country_name: "",
+      arrive_time: "----",
+      start_station_name: "广州",
+      station_train_code: "G5191",
+      start_time: "10:42",
+      station_no: "01",
+    },
+    {
+      arrive_time: "11:36",
+      station_name: "阳春东",
+      isChina: "1",
+      start_time: "11:38",
+      stopover_time: "2分钟",
+      station_no: "02",
+      country_code: "",
+      country_name: "",
+      isEnabled: true,
+    },
+    ]
+    */
     try {
-        let res = await this.fetchWithRetry(api, {
+      let res = await this.fetchWithRetry(api, {
         headers: {
-            Cookie: "JSESSIONID=",
+          Cookie: "JSESSIONID=",
         },
-        });
+      });
 
-        let resp: TrainStationResponse = await res.json();
-        if (resp.data && resp.data.data && resp.data.data.length > 0) {
-            await Promise.all(resp.data.data.map(async (item) => {
-                item.station_code = await ChinaRailway.getStationCode(item.station_name || '') || "";
-            }))
+      let resp: TrainStationResponse = await res.json();
+      if (resp.data && resp.data.data && resp.data.data.length > 0) {
+        await Promise.all(resp.data.data.map(async (item) => {
+          item.station_code = await ChinaRailway.getStationCode(item.station_name || '') || "";
+        }))
 
-            // 缓存站点信息，过期时间设长一点，或者使用永久缓存（直到重启）
-            this.trainStationCache.set(cacheKey, resp.data, this.STATION_CACHE_TTL);
-            return resp.data;
-        }
-    } catch(e) {
-        console.warn(`查询车次 ${code} 经停站失败`, e);
+        // 缓存站点信息，过期时间设长一点，或者使用永久缓存（直到重启）
+        this.trainStationCache.set(cacheKey, resp.data, this.STATION_CACHE_TTL);
+        return resp.data;
+      }
+    } catch (e) {
+      console.warn(`查询车次 ${code} 经停站失败`, e);
     }
     return undefined;
   }
